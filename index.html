@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ゆるポモタイマー</title>
+
+<style>
+body {
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+  text-align: center;
+  background: #fff0f5;
+}
+
+#timer {
+  font-size: 70px;
+  color: #ff7aa2;
+  margin: 20px;
+}
+
+#status {
+  font-size: 20px;
+}
+
+button {
+  padding: 10px 20px;
+  margin: 5px;
+  border-radius: 20px;
+  border: none;
+  background: #ffb6c1;
+  color: white;
+}
+
+#character {
+  font-size: 60px;
+}
+
+#total {
+  margin-top: 15px;
+  font-size: 18px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>ゆるポモ 🍅</h1>
+
+<div id="character">🐻</div>
+<div id="status">スタンバイ</div>
+<div id="timer">01:00</div>
+
+<button onclick="startIdle()">スタート</button>
+<button onclick="stopTimer()">ストップ</button>
+
+<div id="choice"></div>
+
+<div id="total">今日：0分</div>
+<div id="result"></div>
+
+<script>
+let timer = 60;
+let interval;
+let startTime;
+let mode = "";
+
+let totalSeconds = 0;
+let autoTimeout;
+
+// 🎵かわいい音（ポン♪）
+function playSound() {
+  const ctx = new AudioContext();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+
+  o.frequency.value = 600;
+  o.type = "triangle";
+
+  o.connect(g);
+  g.connect(ctx.destination);
+
+  o.start();
+  g.gain.setValueAtTime(1, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+  o.stop(ctx.currentTime + 0.4);
+}
+
+function updateDisplay() {
+  const m = String(Math.floor(timer/60)).padStart(2,'0');
+  const s = String(timer%60).padStart(2,'0');
+  document.getElementById("timer").textContent = `${m}:${s}`;
+}
+
+function updateTotal() {
+  document.getElementById("total").textContent =
+    `今日：${Math.floor(totalSeconds/60)}分`;
+}
+
+// 🐻 コメント
+function setCharacter(text, emoji="🐻") {
+  document.getElementById("status").textContent = text;
+  document.getElementById("character").textContent = emoji;
+}
+
+// ▶ 準備
+function startIdle() {
+  reset();
+  mode="idle";
+  timer=60;
+  setCharacter("じゅんびしよう〜", "🐻");
+
+  runTimer(()=>{
+    playSound();
+    showChoice();
+  });
+}
+
+// ▶ 作業
+function startWork() {
+  clearTimeout(autoTimeout);
+  mode="work";
+  startTime = Date.now();
+  timer=0;
+
+  setCharacter("がんばってるね！", "🐻✨");
+  document.getElementById("choice").innerHTML="";
+
+  interval=setInterval(()=>{
+    timer++;
+    updateDisplay();
+  },1000);
+}
+
+// ▶ 休憩
+function startBreak() {
+  clearTimeout(autoTimeout);
+  mode="break";
+  timer=300;
+
+  setCharacter("ゆっくりやすもう☕", "🐻💤");
+
+  runTimer(()=>{
+    playSound();
+    showChoice();
+  });
+}
+
+// ▶ 停止
+function stopTimer() {
+  clearInterval(interval);
+
+  if(mode==="work"){
+    const sec=Math.floor((Date.now()-startTime)/1000);
+    totalSeconds += sec;
+    updateTotal();
+
+    document.getElementById("result").textContent =
+      `✨ ${Math.floor(sec/60)}分${sec%60}秒できた！`;
+
+    // 👇 KV送信（API仮）
+    sendToKV(sec);
+  }
+}
+
+// ▶ 選択
+function showChoice(){
+  setCharacter("どうする？", "🐻❓");
+
+  document.getElementById("choice").innerHTML=`
+    <button onclick="startWork()">やる！</button>
+    <button onclick="startBreak()">やすむ</button>
+  `;
+
+  autoTimeout=setTimeout(()=>{
+    startWork();
+  },30000);
+}
+
+// ▶ 共通
+function runTimer(cb){
+  clearInterval(interval);
+  interval=setInterval(()=>{
+    timer--;
+    updateDisplay();
+    if(timer<=0){
+      clearInterval(interval);
+      cb();
+    }
+  },1000);
+}
+
+function reset(){
+  clearInterval(interval);
+  clearTimeout(autoTimeout);
+  document.getElementById("choice").innerHTML="";
+}
+
+updateDisplay();
+updateTotal();
+
+// ☁ KV送信（仮API）
+function sendToKV(sec){
+  fetch("/api/save",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ seconds: sec })
+  });
+}
+</script>
+
+</body>
+</html>
